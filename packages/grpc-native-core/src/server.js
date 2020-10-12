@@ -709,11 +709,21 @@ function handleBidiStreaming(call, handler, metadata) {
   handler.func(stream);
 }
 
+// 使用流的方法处理。。
+function handleAll(call, handler, metadata, method) {
+  var stream = new ServerDuplexStream(call, metadata, handler.serialize,
+  handler.deserialize);
+  stream.waitForCancel();
+  handler.func(stream, method);
+}
+
 var streamHandlers = {
   unary: handleUnary,
   server_stream: handleServerStreaming,
   client_stream: handleClientStreaming,
-  bidi: handleBidiStreaming
+  bidi: handleBidiStreaming,
+  // 接受所有请求
+  all: handleAll
 };
 
 /**
@@ -769,20 +779,22 @@ Server.prototype.start = function() {
     var handler;
     if (self.handlers.hasOwnProperty(method)) {
       handler = self.handlers[method];
+      streamHandlers[handler.type](call, handler, metadata);
     } else {
-      var batch = {};
-      batch[grpc.opType.SEND_INITIAL_METADATA] =
-          (new Metadata())._getCoreRepresentation();
-      batch[grpc.opType.SEND_STATUS_FROM_SERVER] = {
-        code: constants.status.UNIMPLEMENTED,
-        details: 'RPC method not implemented ' + method,
-        metadata: (new Metadata())._getCoreRepresentation()
-      };
-      batch[grpc.opType.RECV_CLOSE_ON_SERVER] = true;
-      call.startBatch(batch, function() {});
-      return;
+      // var batch = {};
+      // batch[grpc.opType.SEND_INITIAL_METADATA] =
+      //     (new Metadata())._getCoreRepresentation();
+      // batch[grpc.opType.SEND_STATUS_FROM_SERVER] = {
+      //   code: constants.status.UNIMPLEMENTED,
+      //   details: 'RPC method not implemented ' + method,
+      //   metadata: (new Metadata())._getCoreRepresentation()
+      // };
+      // batch[grpc.opType.RECV_CLOSE_ON_SERVER] = true;
+      // call.startBatch(batch, function() {});
+      // return;
+      handler = self.handlers['UnknownServiceHandler'];
+      streamHandlers[handler.type](call, handler, metadata, method);
     }
-    streamHandlers[handler.type](call, handler, metadata);
   }
   this._server.requestCall(handleNewCall);
 };
